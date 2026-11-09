@@ -257,6 +257,23 @@ Bookings are counted from the emails Calendly, Cal.com and Google Calendar send 
 | Apollo | Sequences and AI writing | Contacts: there is no built-in database |
 | Clay | AI research on company sites, with a quote for every answer | Other data providers |
 
+### Other open-source AI SDRs
+
+[AgentSDR](https://github.com/Kandid-ai/AgentSDR) is another open-source AI SDR. The two are built for different setups. As of 9 November 2026, from its README and [website](https://agentsdr.ai):
+
+| | Outlevo Community | AgentSDR |
+|---|---|---|
+| License | AGPL-3.0-only | MIT |
+| How it runs | One `npx` command on your machine; SQLite in a folder, no server | A web app: Docker Compose, or Bun with PostgreSQL 16+, on a server you run |
+| Email sending | Any mailbox with SMTP and IMAP | Google Workspace, through a service account with domain-wide delegation; Microsoft 365 not yet |
+| What an email rests on | A quote that must really be on the page it names, checked in code before it can be approved | AI research and enrichment columns |
+| Opens and clicks | Not tracked | Not tracked |
+| LinkedIn and WhatsApp | Notes for you to send by hand | Sent through Unipile, with WhatsApp calls from a Chrome extension |
+| Data | Your own Hunter key or list | 15 enrichment providers in tables |
+| Team | One person in a terminal | A shared web app with a CRM |
+
+Choose AgentSDR if you want a team web app with LinkedIn and WhatsApp automation and a server to host it on. Choose Community if you want to start in one command, keep everything in a folder on your machine, send from any mailbox, and have every claim checked against its quote.
+
 ## The rules it will not break
 
 These are in the code, and each has a test.
