@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-11-09)
 
 - `outlevo enrich <list.csv>`: researches the companies of your own list from their own sites and writes `list.enriched.csv` with your columns first, then whether each fits, why (with its quote and source), who to write to and the status. Contacts come only from a page that names them or from your own Hunter key. It prints an estimate of model calls and asks before it goes ahead (`--yes` skips the question), never pays twice for a company already researched, and respects `model.max_calls_per_day`. Name your site with `--website` if there was no `outlevo start` here.
 - `--ask "question"` on `start` and `enrich`, repeatable up to 10 times: your own question answered for each company from its pages, with a quote and its source, or `not found`. An answer is kept only if its quote is on the page it names. In `enrich` the answers are CSV columns; in `start` they are in the pack's `index.html`, `companies.csv` and `emails/`.
