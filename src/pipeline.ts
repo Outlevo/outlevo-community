@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { type App, arr, nullable, obj, S, UNTRUSTED, untrusted } from './app.js';
-import { normalizeDomain, parseCsv } from './csv.js';
+import { domainOf, normalizeDomain, parseCsv } from './csv.js';
 import { all, logEvent, one, run } from './db.js';
 import { type Page, quoteIsOn } from './fetcher.js';
 import { isSuppressed } from './compliance.js';
@@ -14,16 +14,17 @@ const MAX_PAGES = 6; const MAX_PAGE_CHARS = 20_000; const WRITE_TRIES = 3;
 const iso = (a: App) => a.now().toISOString();
 const PAGE_WORTH: Array<[RegExp, number]> = [[/about|company|team|leadership/, 5], [/customers?|case-stud|clients/, 5], [/pricing|plans/, 4], [/careers?|jobs|hiring/, 4], [/news|press|blog|changelog|updates/, 3], [/product|platform|solutions?|features/, 2]];
 
-async function readSite(a: App, domain: string, maxPages = MAX_PAGES): Promise<Page[]> {
+/** `extra` ranks more links as worth reading, for pages a question is likely to be answered on. */
+export async function readSite(a: App, domain: string, maxPages = MAX_PAGES, extra: Array<[RegExp, number]> = []): Promise<Page[]> {
   const home = (await a.fetchPage(`https://${domain}/`).catch(() => null)) ?? (await a.fetchPage(`https://www.${domain}/`).catch(() => null));
   if (!home) return [];
   const sameSite = (u: string) => { const h = new URL(u).hostname.replace(/^www\./, ''); return h === domain || h.endsWith(`.${domain}`); };
-  const score = (u: string) => { const p = new URL(u).pathname.toLowerCase(); return PAGE_WORTH.find(([re]) => re.test(p))?.[1] ?? 0; };
+  const score = (u: string) => { const p = new URL(u).pathname.toLowerCase(); return [...extra, ...PAGE_WORTH].find(([re]) => re.test(p))?.[1] ?? 0; };
   const picks = home.links.filter((u) => u !== home.url && sameSite(u) && score(u) > 0).sort((x, y) => score(y) - score(x) || x.length - y.length).slice(0, maxPages - 1);
   const rest = await Promise.all(picks.map((u) => a.fetchPage(u).catch(() => null)));
   return [home, ...rest.filter((p): p is Page => !!p && p.text.length > 40)];
 }
-const pagesFor = (pages: Page[]) => pages.map((p) => untrusted(p.url, p.text.slice(0, MAX_PAGE_CHARS))).join('\n\n');
+export const pagesFor = (pages: Page[]) => pages.map((p) => untrusted(p.url, p.text.slice(0, MAX_PAGE_CHARS))).join('\n\n');
 
 const FACT = obj({ kind: { type: 'string', enum: ['what_they_do', 'customers', 'hiring', 'funding', 'launch', 'leadership', 'pricing', 'tech', 'other'] }, text: S, quote: S, source_url: S, published_at: nullable('string') });
 // A search on the words of what we sell finds those who write about it: rivals and consultants in the same field, not buyers.
@@ -52,12 +53,12 @@ export async function learnProduct(a: App, url = a.config.website) {
 export type Icp = { summary: string; industries: string[]; company_size: string; markets: string[]; buyer_titles: string[]; must_have: string[]; rule_out: string[]; learned_from: string };
 const ICP_SCHEMA = obj({ summary: S, industries: arr(S), company_size: S, markets: arr(S), buyer_titles: arr(S), must_have: arr(S), rule_out: arr(S), learned_from: S });
 
-const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'live.com', 'aol.com', 'icloud.com', 'proton.me', 'protonmail.com', 'gmx.com', 'mail.com']);
+export const FREE_MAIL = new Set(['gmail.com', 'googlemail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'live.com', 'aol.com', 'icloud.com', 'proton.me', 'protonmail.com', 'gmx.com', 'mail.com']);
 /** The deals worth reading from a file, and what was left out of it and why. */
 function dealsIn(a: App, path?: string) {
   const domains = new Set<string>(); const skipped: Array<{ row: string; reason: string }> = [];
   (path ? parseCsv(readFileSync(path, 'utf8')) : []).forEach((r, i) => {
-    const raw = r.domain ?? r.website ?? r.company_domain ?? ''; const d = normalizeDomain(raw);
+    const raw = domainOf(r); const d = normalizeDomain(raw);
     const label = raw.slice(0, 80) || `row ${i + 2}`;
     if (!d) skipped.push({ row: label, reason: 'not a domain' });
     else if (FREE_MAIL.has(d)) skipped.push({ row: label, reason: 'a personal email service, not a company' });
@@ -107,7 +108,7 @@ export async function learnIcp(a: App, opts: { won?: string; lost?: string; brie
 export const getIcp = (a: App) => { const r = one<{ body: string }>(a.db, 'select body from icp'); return r ? (JSON.parse(r.body) as Icp) : null; };
 
 export class OwnCompany extends Error {}
-const isOwnDomain = (a: App, domain: string) => {
+export const isOwnDomain = (a: App, domain: string) => {
   const own = [a.config.website, one<{ url: string }>(a.db, 'select url from product')?.url ?? '', a.config.sender.email.split('@')[1] ?? ''].map((x) => normalizeDomain(x)).filter(Boolean) as string[];
   return own.some((d) => domain === d || domain.endsWith(`.${d}`));
 };
@@ -125,7 +126,7 @@ export function addCompany(a: App, input: string, source: string, name?: string)
 export function importCompanies(a: App, path: string) {
   let added = 0; let duplicates = 0; const skipped: Array<{ row: string; reason: string }> = [];
   for (const row of parseCsv(readFileSync(path, 'utf8'))) {
-    const v = row.domain ?? row.website ?? row.company_domain ?? '';
+    const v = domainOf(row);
     if (!v) { skipped.push({ row: JSON.stringify(row).slice(0, 80), reason: 'no domain column or value' }); continue; }
     try { if (addCompany(a, v, 'csv', row.name ?? row.company).added) added++; else duplicates++; }
     catch (e) { skipped.push({ row: v.slice(0, 80), reason: e instanceof OwnCompany ? 'your own company' : 'not a domain' }); }

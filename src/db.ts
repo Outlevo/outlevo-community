@@ -35,6 +35,9 @@ create table if not exists linkedin_notes (
 create table if not exists brought_signals (
   id integer primary key, company_id integer not null references companies(id) on delete cascade, name text not null, title text,
   post_url text not null, text text not null, posted_at text, created_at text not null, unique (company_id, post_url));
+create table if not exists answers (
+  company_id integer not null references companies(id) on delete cascade, question text not null, found integer not null,
+  answer text not null, quote text not null, source_url text not null, asked_at text not null, primary key (company_id, question));
 create table if not exists replies (
   id integer primary key, contact_id integer references contacts(id) on delete set null, message_id text unique, from_addr text not null,
   subject text, text text, class text not null, reason text, received_at text not null,

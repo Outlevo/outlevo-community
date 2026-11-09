@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { App } from './app.js';
+import { type Answer, answersFor } from './ask.js';
 import { all, logEvent, one } from './db.js';
 import { getIcp } from './pipeline.js';
 
@@ -11,7 +12,7 @@ export const DONE_FOR_YOU_URL = 'https://outlevo.com/done-for-you/?utm_source=co
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const webUrl = (u: string) => { try { const x = new URL(u); return x.protocol === 'http:' || x.protocol === 'https:' ? x.href : null; } catch { return null; } };
 // A spreadsheet would run a cell that starts like a formula, and these cells hold text from strangers' websites.
-const csvCell = (v: unknown) => { const s = /^\s*[=+\-@]/.test(String(v ?? '')) ? `'${v}` : String(v ?? ''); return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s; };
+export const csvCell = (v: unknown) => { const s = /^\s*[=+\-@]/.test(String(v ?? '')) ? `'${v}` : String(v ?? ''); return /[",\n\r]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s; };
 
 // Scraped text ends up in these files, and a Markdown viewer would load an image, run a tag or dress up a link in it. Only a plain <address> stays.
 // An autolink like <http://x/@a> is not an address: only a bare <name@host> with no / : or ? is kept.
@@ -21,7 +22,7 @@ const oneLine = (s: string | null | undefined) => String(s ?? '').replace(/\s+/g
 
 type Email = { step: number; sent: boolean; subject: string; body: string; delay_days: number; claims: Array<{ text: string; source: { quote: string; source_url: string } | null }> };
 type Linkedin = { note: string; message: string; sources: Array<{ text: string; source: { quote: string; source_url: string } | null }> };
-export type PackCompany = { id: number; domain: string; name: string | null; score: number | null; why: string[]; to: string; person: string | null; email: string | null; emails: Email[]; blocked: boolean; linkedin: Linkedin | null };
+export type PackCompany = { id: number; domain: string; name: string | null; score: number | null; why: string[]; to: string; person: string | null; email: string | null; emails: Email[]; blocked: boolean; linkedin: Linkedin | null; answers: Answer[] };
 
 export function packData(a: App): PackCompany[] {
   const companies = all<{ id: number; domain: string; name: string | null; score: number | null; reasons: string | null }>(a.db, "select id, domain, name, score, reasons from companies where status = 'qualified' order by coalesce(score, 0) desc, id");
@@ -33,6 +34,7 @@ export function packData(a: App): PackCompany[] {
     const rows = drafts.length ? drafts : own;
     const li = one<{ note: string; message: string; claims: string }>(a.db, 'select note, message, claims from linkedin_notes where company_id = ?', c.id);
     return {
+      answers: answersFor(a, c.id),
       linkedin: li ? { note: li.note, message: li.message, sources: withSources(li.claims) } : null,
       id: c.id, domain: c.domain, name: c.name, score: c.score, why: (JSON.parse(c.reasons ?? '{}').reasons ?? []).map((r: { text: string }) => r.text.trim().replace(/[.;]+$/, '')),
       to: person ? `${person.first_name} ${person.last_name ?? ''}`.trim() + (person.title ? `, ${person.title}` : '') : own[0]?.to_title ?? '',
@@ -43,8 +45,11 @@ export function packData(a: App): PackCompany[] {
   });
 }
 
+/** The person's own questions, each answered with its quote and source, or not found. */
+const answersMd = (answers: Answer[]) => answers.length ? ['', 'Your questions:', ...answers.map((x) => x.found ? `- ${oneLine(x.question)} ${oneLine(x.answer)} ("${oneLine(x.quote)}" ${oneLine(x.source_url)})` : `- ${oneLine(x.question)} Not found on the pages read`)] : [];
+
 function emailMd(c: PackCompany) {
-  const head = [`# ${c.name ?? c.domain}`, '', `Website: https://${c.domain}`, `Write to: ${c.to || 'the person who owns this problem'}${c.email ? ` <${c.email}>` : ''}`, ...(c.why.length ? ['', `Why this company: ${c.why.join('; ')}`] : [])];
+  const head = [`# ${c.name ?? c.domain}`, '', `Website: https://${c.domain}`, `Write to: ${c.to || 'the person who owns this problem'}${c.email ? ` <${c.email}>` : ''}`, ...(c.why.length ? ['', `Why this company: ${c.why.join('; ')}`] : []), ...answersMd(c.answers)];
   const mails = c.emails.map((e) => [`## ${e.step === 1 ? 'First email' : `Follow-up ${e.step - 1}, after ${e.delay_days} days`}${e.sent ? ' (already sent)' : ''}`, '', `Subject: ${e.subject}`, '', e.body, ...(e.claims.length ? ['', 'Sources:', ...e.claims.map((x) => `- "${oneLine(x.source?.quote ?? x.text)}" ${oneLine(x.source?.source_url)}`)] : [])].join('\n'));
   return [...head, '', ...mails.flatMap((m) => [m, ''])].join('\n');
 }
@@ -74,10 +79,11 @@ function page(a: App, ready: PackCompany[], left: Left) {
   const cards = ready.map((c) => {
     const first = c.emails[0];
     const src = (e: Email) => e.claims.map((x) => { const u = x.source ? webUrl(x.source.source_url) : null; return `<p class="src">“${esc(x.source?.quote ?? x.text)}”${u ? ` <a href="${esc(u)}" rel="noopener noreferrer">source</a>` : ''}</p>`; }).join('');
+    const asked = (c.answers).map((x) => { const u = x.found ? webUrl(x.source_url) : null; return `<p class="q">${esc(x.question)}</p>${x.found ? `<p class="ans">${esc(x.answer)}</p><p class="src">“${esc(x.quote)}”${u ? ` <a href="${esc(u)}" rel="noopener noreferrer">source</a>` : ''}</p>` : '<p class="muted">Not found on the pages read</p>'}`; }).join('');
     const sent = (e: Email) => e.sent ? ' <span class="sent">already sent</span>' : '';
     const later = c.emails.slice(1).map((e) => `<details><summary>Follow-up ${e.step - 1}, after ${esc(e.delay_days)} days${sent(e)}</summary><p class="subj">${esc(e.subject)}</p><p class="body">${esc(e.body)}</p>${src(e)}</details>`).join('')
       + (c.linkedin ? `<details><summary>LinkedIn, to send by hand</summary><p class="subj">Connection note</p><p class="body">${esc(c.linkedin.note)}</p>${c.linkedin.message ? `<p class="subj">After they accept</p><p class="body">${esc(c.linkedin.message)}</p>` : ''}${src({ claims: c.linkedin.sources } as Email)}</details>` : '');
-    return `<article><h3>${esc(c.name ?? c.domain)} <span class="to">write to ${esc(c.to || 'the person who owns this')}${c.email ? ` · ${esc(c.email)}` : ''}</span></h3>${c.why.length ? `<p class="why">${esc(c.why.join(' · '))}</p>` : ''}${first ? `<p class="subj">${esc(first.subject)}${sent(first)}</p><p class="body">${esc(first.body)}</p>${src(first)}` : ''}${later}</article>`;
+    return `<article><h3>${esc(c.name ?? c.domain)} <span class="to">write to ${esc(c.to || 'the person who owns this')}${c.email ? ` · ${esc(c.email)}` : ''}</span></h3>${c.why.length ? `<p class="why">${esc(c.why.join(' · '))}</p>` : ''}${asked}${first ? `<p class="subj">${esc(first.subject)}${sent(first)}</p><p class="body">${esc(first.body)}</p>${src(first)}` : ''}${later}</article>`;
   }).join('\n');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Your sales pack</title><style>
 :root{--bg:#f3f6fd;--card:#fff;--ink:#0b0d12;--text:#1c2230;--muted:#4b5262;--line:#e3e8f1;--link:#1463d6;--go:#e3f4e9;color-scheme:light dark}
@@ -85,7 +91,7 @@ function page(a: App, ready: PackCompany[], left: Left) {
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{max-width:800px;margin:0 auto;padding:32px 16px 64px}
 h1{color:var(--ink);font-size:30px;letter-spacing:-.03em;margin:0 0 6px}h2{color:var(--ink);font-size:18px;margin:32px 0 10px}h3{color:var(--ink);font-size:16px;margin:0 0 6px}.to{display:block;color:var(--muted);font-size:13px;font-weight:400}
 a{color:var(--link)}article,.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:0 0 12px}.muted,.why{color:var(--muted)}.why{font-size:13.5px}.subj{font-weight:600;color:var(--ink);margin:12px 0 2px}.body{white-space:pre-wrap;overflow-wrap:anywhere;margin:0}
-.sent{background:var(--go);color:var(--ink);border-radius:5px;padding:1px 6px;font-size:12px;font-weight:400}.src{border-left:3px solid var(--line);padding-left:10px;font-size:13px;color:var(--muted);overflow-wrap:anywhere;margin:8px 0}details{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}summary{cursor:pointer;color:var(--muted);font-size:14px;min-height:28px}ol{padding-left:20px;margin:0}li{margin:6px 0}code{background:var(--bg);padding:1px 5px;border-radius:5px;font-size:13px;overflow-wrap:anywhere}
+.q{font-weight:600;color:var(--ink);font-size:13.5px;margin:10px 0 0}.ans{margin:2px 0}.sent{background:var(--go);color:var(--ink);border-radius:5px;padding:1px 6px;font-size:12px;font-weight:400}.src{border-left:3px solid var(--line);padding-left:10px;font-size:13px;color:var(--muted);overflow-wrap:anywhere;margin:8px 0}details{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}summary{cursor:pointer;color:var(--muted);font-size:14px;min-height:28px}ol{padding-left:20px;margin:0}li{margin:6px 0}code{background:var(--bg);padding:1px 5px;border-radius:5px;font-size:13px;overflow-wrap:anywhere}
 </style></head><body><main>
 <h1>Your sales pack</h1><p class="muted">${ready.length} companies, each with a reason and emails. ${sentCount ? `${sentCount} ${sentCount === 1 ? 'email has' : 'emails have'} been sent, and each is marked.` : 'Nothing has been sent.'}</p>
 <div class="box"><h3>What you sell</h3><p>${esc(product?.summary)}</p><h3>Who to sell to</h3><p>${esc(icp?.summary)}</p><p class="muted">Buyers: ${esc(icp?.buyer_titles.join(', '))}. ${esc(icp?.learned_from)}</p></div>
@@ -132,8 +138,10 @@ export function buildPack(a: App, out = 'sales-pack') {
   for (const c of ready) writeFileSync(join(mails, `${c.domain}.md`), inertMd(emailMd(c))); // a domain is checked before it is stored, so it is a safe file name
   const icp = getIcp(a); const product = one<{ summary: string }>(a.db, 'select summary from product');
   writeFileSync(join(building, 'ideal-customer.md'), inertMd([`# Who to sell to`, '', product?.summary ?? '', '', icp?.summary ?? '', '', `Industries: ${icp?.industries.join(', ') ?? ''}`, `Company size: ${icp?.company_size ?? ''}`, `Markets: ${icp?.markets.join(', ') ?? ''}`, `Buyers: ${icp?.buyer_titles.join(', ') ?? ''}`, `Must have: ${icp?.must_have.join('; ') ?? ''}`, `Rule out: ${icp?.rule_out.join('; ') ?? ''}`, '', `Learned from: ${icp?.learned_from ?? ''}`, ''].join('\n')));
-  const head = ['company', 'website', 'score', 'why', 'write_to', 'name', 'email', 'quote', 'source', 'subject_1', 'email_1', 'subject_2', 'email_2', 'subject_3', 'email_3', 'linkedin_note', 'linkedin_message'];
-  const rows = ready.map((c) => { const q = c.emails[0]?.claims[0]?.source; return [c.name ?? c.domain, `https://${c.domain}`, c.score, c.why.join('; '), c.to, c.person, c.email, q?.quote, q?.source_url, ...[0, 1, 2].flatMap((i) => [c.emails[i]?.subject, c.emails[i]?.body]), c.linkedin?.note, c.linkedin?.message].map(csvCell).join(','); });
+  // One set of columns for each question asked of any of them: the pack's columns stay as they were when nothing was asked.
+  const questions = [...new Set(ready.flatMap((c) => c.answers.map((x) => x.question)))];
+  const head = ['company', 'website', 'score', 'why', 'write_to', 'name', 'email', 'quote', 'source', 'subject_1', 'email_1', 'subject_2', 'email_2', 'subject_3', 'email_3', 'linkedin_note', 'linkedin_message', ...questions.flatMap((q) => [`answer: ${q}`, `answer: ${q} (quote)`, `answer: ${q} (source)`])];
+  const rows = ready.map((c) => { const q = c.emails[0]?.claims[0]?.source; return [c.name ?? c.domain, `https://${c.domain}`, c.score, c.why.join('; '), c.to, c.person, c.email, q?.quote, q?.source_url, ...[0, 1, 2].flatMap((i) => [c.emails[i]?.subject, c.emails[i]?.body]), c.linkedin?.note, c.linkedin?.message, ...questions.flatMap((q) => { const x = c.answers.find((y) => y.question === q); return x?.found ? [x.answer, x.quote, x.source_url] : [x ? 'not found' : '', '', '']; })].map(csvCell).join(','); });
   writeFileSync(join(building, 'companies.csv'), [head.join(','), ...rows].join('\n') + '\n');
   writeFileSync(join(building, 'linkedin.md'), inertMd(linkedinMd(ready)));
   writeFileSync(join(building, 'index.html'), page(a, ready, left));

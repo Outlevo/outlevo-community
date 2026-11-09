@@ -180,6 +180,7 @@ To make it better, add what you have:
 ```bash
 outlevo start https://yourcompany.com --won won.csv --lost lost.csv   # a column named domain
 outlevo companies import companies.csv                                # your own list, a column named domain
+outlevo enrich companies.csv                                          # your own list, researched: see Enrich your own list
 outlevo contacts import people.csv                                    # email, first_name, last_name, title, domain
 outlevo signals import posts.csv                                      # posts you found: domain, name, text, post_url (title, date, email)
 ```
@@ -189,6 +190,37 @@ Try the rules on any email, with no key and no network:
 ```bash
 outlevo check email.txt
 ```
+
+## Enrich your own list
+
+Already have a list of companies? `outlevo enrich` is the free, open-source way to enrich it without building tables. It reads a CSV with a column named `domain`, `website` or `url`, researches each company from its own site, and writes the list back as `companies.enriched.csv` next to it, with your columns first.
+
+```bash
+outlevo enrich companies.csv                                  # after outlevo start: it knows who you sell to
+outlevo enrich companies.csv --website https://yourcompany.com   # or name your site, and it works that out first
+```
+
+What it adds to each row:
+
+| Column | What it holds |
+|---|---|
+| `outlevo_fit`, `outlevo_score` | `yes` or `no` against your ideal customer, and its score |
+| `outlevo_why`, `outlevo_quote`, `outlevo_source` | Why it fits, with the quote from their page and its URL. A company that does not fit says what is missing |
+| `outlevo_write_to`, `outlevo_contact_email`, `outlevo_contact_source` | Who to write to: a person named on their site, or found with your own `HUNTER_API_KEY`, with a verified address. With neither, the role from your ideal customer, and no address is guessed |
+| `outlevo_status` | `done`, or why a row was not: a site that could not be read, a row with no website, your own company |
+
+Before it spends anything it prints how many model calls it expects and asks you to confirm; `--yes` skips the question. A company researched before, by `start` or an earlier `enrich`, is not paid for twice, and `model.max_calls_per_day` still caps the day. Run it again and it carries on. It sends nothing. The companies join this folder like any imported list, so a later `outlevo start` writes emails for the ones that fit.
+
+## Ask your own questions
+
+Add `--ask` to `outlevo start` or `outlevo enrich` and it answers your question for every company, from the pages it reads:
+
+```bash
+outlevo enrich companies.csv --ask "Do they have SOC 2?" --ask "Which CRM do they use?"
+outlevo start https://yourcompany.com --ask "Do they sell to enterprises?"
+```
+
+An answer is kept only if its quote is really on the page it names, word for word, and a number in it is in the quote. Otherwise the answer is `not found`, which means it was not on the pages read, not that the answer is no. In `enrich` the answers are columns of the CSV: `answer: <question>`, with `(quote)` and `(source)` beside it. In `start` they are in `sales-pack/index.html` under each company, and in its `companies.csv` and `emails/`. `start` asks only the companies that fit. Pages that are likely to hold the answer, like a security page, are read too. Up to 10 questions at a time, and one more model call per company for all of them. Asked once, an answer is not paid for again.
 
 ## From approved email to meeting
 

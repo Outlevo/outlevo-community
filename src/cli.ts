@@ -15,6 +15,8 @@ import { addCompany, approve, discoverCompanies, dropCompany, rewriteEmails, get
 import { addMeeting, checkReplies, sendSuggestedReply } from './replies.js';
 import { sendNext } from './send.js';
 import { buildPack } from './pack.js';
+import { cleanAsks } from './ask.js';
+import { enrich } from './enrich.js';
 import { importSignals } from './brought.js';
 import { prepareSite, start } from './start.js';
 import { CONTROL } from './fetcher.js';
@@ -27,9 +29,13 @@ Setup
   config show
   doctor                           What must be fixed before anything can send
 Start here
-  start <your-site> [--count N] [--won a.csv] [--lost b.csv] [--brief "..."] [--out sales-pack]
+  start <your-site> [--count N] [--won a.csv] [--lost b.csv] [--brief "..."] [--ask "..."] [--out sales-pack]
                                    Your sales pack: who to sell to, companies, emails. Sends nothing
                                    --count is how many companies to reach, as many as you like (20 if not given)
+                                   --ask "Do they have SOC 2?" asks your own question of every company, answered with a quote and its source, or not found. Repeat it for more
+  enrich <list.csv> [--website URL] [--ask "..."] [--out file.csv] [--yes]
+                                   Your own list, researched: fit, why with its quote and source, who to write to, and your questions
+                                   answered. Writes list.enriched.csv next to it. Says what it would cost first, and asks before it goes ahead
   pack [--out sales-pack]          Build the pack again from what is here
   rewrite <company> "what to change"   Rewrite its emails. They go through every check again, and approved ones need approving again
   drop <company> [--undo]          Take a company out of the pack and the queue. --undo puts it back
@@ -75,7 +81,7 @@ Outlevo Cloud (optional, paid)
   cloud handoff --name "..." [--company ID ...]
 
 Add --json for machine-readable output.
-Exit codes: 0 done, 1 failed, 2 costs Cloud credits and needs --yes, 3 needs a person at a terminal.
+Exit codes: 0 done, 1 failed, 2 costs Cloud credits or model calls and needs --yes, 3 needs a person at a terminal.
 run and dashboard keep running until stopped; run --once does one turn.`;
 
 let parsed;
@@ -85,7 +91,7 @@ parsed = parseArgs({
   options: {
     version: { type: 'boolean', short: 'v' }, json: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, yes: { type: 'boolean' }, once: { type: 'boolean' }, relearn: { type: 'boolean' }, undo: { type: 'boolean' }, 'dry-run': { type: 'boolean' },
     website: { type: 'string' }, won: { type: 'string' }, lost: { type: 'string' }, brief: { type: 'string' }, like: { type: 'string' }, titles: { type: 'string' }, name: { type: 'string' },
-    count: { type: 'string' }, limit: { type: 'string' }, port: { type: 'string' }, out: { type: 'string' }, company: { type: 'string', multiple: true }, contact: { type: 'string' },
+    count: { type: 'string' }, limit: { type: 'string' }, port: { type: 'string' }, out: { type: 'string' }, company: { type: 'string', multiple: true }, ask: { type: 'string', multiple: true }, contact: { type: 'string' },
   },
 });
 } catch (e) {
@@ -107,6 +113,15 @@ async function needsPerson(what: string) {
 }
 /** The same line for the dashboard. Its link goes to stdout, so a script that captures stdout must not get a page that can approve. */
 const atTerminal = () => process.env.OUTLEVO_ALLOW_SCRIPTED_APPROVAL === '1' || (!!process.stdin.isTTY && !!process.stdout.isTTY);
+/** A run that spends your model calls says what it will cost and waits for a yes, unless --yes. */
+async function confirmRun(plan: string) {
+  console.error(plan);
+  if (!process.stdin.isTTY) { const e = new Error('This waits for a yes. Add --yes to go ahead.'); (e as any).exit = 2; throw e; }
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const answer = await rl.question('Go ahead? Type yes: ');
+  rl.close();
+  if (answer.trim().toLowerCase() !== 'yes') { const e = new Error('Nothing was done.'); (e as any).exit = 3; throw e; }
+}
 const need = (v: string | undefined, what: string) => { if (!v) throw new Error(`Missing ${what}. See: outlevo --help`); return v; };
 const output = (data: unknown, human?: string) => console.log(flags.json || human === undefined ? JSON.stringify(data, null, 2) : human.replace(CONTROL, ''));
 
@@ -144,9 +159,18 @@ async function main() {
   const a = makeApp();
   switch (cmd) {
     case 'start': {
+      const asks = cleanAsks(flags.ask);
       prepareSite(a, need(sub ?? a.config.website, 'your website: outlevo start https://yourcompany.com'), !!flags.relearn);
       saveConfig(a.config, a.home);
-      const r = await start(a, { count: num(flags.count, 20), ...(flags.out ? { out: flags.out } : {}), ...(flags.won ? { won: flags.won } : {}), ...(flags.lost ? { lost: flags.lost } : {}), ...(flags.brief ? { brief: flags.brief } : {}) }, flags.json ? () => {} : (l) => console.log(l));
+      const r = await start(a, { count: num(flags.count, 20), ...(flags.out ? { out: flags.out } : {}), ...(flags.won ? { won: flags.won } : {}), ...(flags.lost ? { lost: flags.lost } : {}), ...(flags.brief ? { brief: flags.brief } : {}), ...(asks.length ? { ask: asks } : {}) }, flags.json ? () => {} : (l) => console.log(l));
+      if (flags.json) output(r);
+      return;
+    }
+    case 'enrich': {
+      const file = need(sub, 'a list: outlevo enrich companies.csv');
+      const asks = cleanAsks(flags.ask);
+      if (flags.website) { prepareSite(a, flags.website, !!flags.relearn); saveConfig(a.config, a.home); }
+      const r = await enrich(a, { file, asks, yes: !!flags.yes, ...(flags.out ? { out: flags.out } : {}), ...(flags.brief ? { brief: flags.brief } : {}) }, flags.json ? () => {} : (l) => console.log(l), confirmRun);
       if (flags.json) output(r);
       return;
     }

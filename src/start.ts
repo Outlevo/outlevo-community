@@ -1,4 +1,5 @@
 import type { App } from './app.js';
+import { askCompany, unanswered } from './ask.js';
 import { findContacts, HunterRefused } from './contacts.js';
 import { type Check, ready, readiness } from './compliance.js';
 import { normalizeDomain } from './csv.js';
@@ -7,13 +8,13 @@ import { BudgetExhausted } from './model.js';
 import { buildPack, checkPackFolder } from './pack.js';
 import { companiesToWrite, discoverCompanies, getIcp, learnIcp, learnProduct, nextToWrite, researchCompany, reviewQueue, writeForCompany, writeSequence } from './pipeline.js';
 
-export type StartOptions = { count: number; won?: string; lost?: string; brief?: string; out?: string };
+export type StartOptions = { count: number; won?: string; lost?: string; brief?: string; out?: string; ask?: string[] };
 
-const WORKERS = 4;
+export const WORKERS = 4;
 const UNLIMITED = 1_000_000;
 const SEARCH_PASSES = 3;
 /** A first run is many slow model calls. A few at a time turns an hour into minutes. */
-async function pool<T>(items: T[], n: number, fn: (item: T) => Promise<void>) {
+export async function pool<T>(items: T[], n: number, fn: (item: T) => Promise<void>) {
   let next = 0; let failed: unknown;
   await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
     while (next < items.length && failed === undefined) { const item = items[next++]!; try { await fn(item); } catch (e) { failed = e; } }
@@ -79,6 +80,12 @@ export async function start(a: App, o: StartOptions, say: (line: string) => void
       await research("status = 'new'");
       if (failed || !added.length) break;
     }
+    // Only the companies that fit are in the pack, so only they are asked.
+    const toAsk = all<{ id: number; domain: string }>(a.db, "select id, domain from companies where status = 'qualified' order by id").filter((c) => unanswered(a, c.id, o.ask ?? []).length);
+    if (toAsk.length) say(`Answering your ${(o.ask ?? []).length === 1 ? 'question' : 'questions'} at ${toAsk.length} ${toAsk.length === 1 ? 'company' : 'companies'}…`);
+    await pool(toAsk, WORKERS, async (c) => {
+      try { const r = await askCompany(a, c.id, o.ask ?? []); say(`  ${c.domain}: ${r.status === 'unreadable' ? 'site could not be read' : `${r.found} of ${r.asked} found`}`); } catch (e) { say(`  ${c.domain}: ${stopped(e)}`); }
+    });
     if (a.secrets.hunter_key) {
       say('Finding the right person at each company with your Hunter key…');
       try { const r = await findContacts(a, { limit: UNLIMITED }); say(`  ${r.added} verified, ${r.not_verified} not verified and left out${r.no_buyer ? `, ${r.no_buyer} with nobody in your buyer roles` : ''}.`); }

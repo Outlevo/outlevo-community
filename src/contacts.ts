@@ -19,7 +19,7 @@ async function hunter<T>(path: string, params: Record<string, string>, key: stri
 /** The best-fitting person at each qualified company with nobody to write to. Only an address Hunter calls valid is kept, and a guess never is. */
 const LEADER = /\b(founder|co-?founder|ceo|chief executive|owner|president|managing director|managing partner|general manager)\b/i;
 
-export async function findContacts(a: App, opts: { limit: number; doFetch?: typeof fetch }) {
+export async function findContacts(a: App, opts: { limit: number; companyIds?: number[]; doFetch?: typeof fetch }) {
   const key = a.secrets.hunter_key;
   if (!key) throw new Error('Set HUNTER_API_KEY to find contacts with your own Hunter account, import a CSV, or use outlevo cloud contacts.');
   const doFetch = opts.doFetch ?? fetch;
@@ -33,6 +33,7 @@ export async function findContacts(a: App, opts: { limit: number; doFetch?: type
   const companies = all<{ id: number; domain: string }>(a.db, `select c.id, c.domain from companies c where c.status = 'qualified'
     and not exists (select 1 from contacts p where p.company_id = c.id and p.status = 'active' and p.email_source in ('imported','published','verified'))
     and not exists (select 1 from events e where e.kind = 'contacts.searched' and e.data = json_object('company_id', c.id))
+    ${opts.companyIds ? `and c.id in (${opts.companyIds.map(Number).filter(Number.isInteger).join(',') || 'null'})` : ''}
     order by coalesce(c.score, 0) desc limit ?`, opts.limit);
   let added = 0; let notVerified = 0; let looked = 0; let outOfLookups = false; let noBuyer = 0;
   for (const c of companies) {
