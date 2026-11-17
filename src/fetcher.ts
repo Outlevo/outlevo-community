@@ -226,9 +226,9 @@ export function makeFetcher(doFetch: typeof fetch = pinnedFetch): PageFetcher {
 }
 
 // Job boards are often linked from scripts (a careers page that renders from JSON), not an <a>: their URLs are taken
-// from the raw page too. Only these four hosts, and the board still has to carry the company's name (jobs.ts). A
+// from the raw page too. Only these five hosts, and the board still has to carry the company's name (jobs.ts). A
 // Recruitee board is a subdomain, so its link may have no path at all.
-const BOARD_URL = /https?:\\?\/\\?\/(?:(?:(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com)\\?\/[a-z0-9_.\-?=\\/]{2,120}|[a-z0-9-]{1,63}\.recruitee\.com\b(?:\\?\/[a-z0-9_.\-?=\\/]{0,120})?)/gi;
+const BOARD_URL = /https?:\\?\/\\?\/(?:(?:(?:boards|job-boards)(?:\.eu)?\.greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|apply\.workable\.com)\\?\/[a-z0-9_.\-?=\\/]{2,120}|[a-z0-9-]{1,63}\.recruitee\.com\b(?:\\?\/[a-z0-9_.\-?=\\/]{0,120})?)/gi;
 export const boardUrls = (html: string) => [...new Set([...html.slice(0, MAX_BYTES).matchAll(BOARD_URL)].map((m) => m[0].replace(/\\\//g, '/')))].slice(0, 20);
 
 // An address and phone a site gives only in its structured data (JSON-LD), written out as an address is, so the Form D

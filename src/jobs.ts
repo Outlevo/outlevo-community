@@ -3,7 +3,7 @@ import { logEvent } from './db.js';
 import { CONTROL, type Page } from './fetcher.js';
 
 // Hiring signals from public job boards. A company that is hiring for a role is often buying for it, and a posting is a
-// dated, quotable fact. Greenhouse, Lever, Ashby and Recruitee publish every board as public JSON. A board counts only when the
+// dated, quotable fact. Greenhouse, Lever, Ashby, Recruitee and Workable publish every board as public JSON. A board counts only when the
 // company's own website links to it, so a posting is never pinned on the wrong company. No model call and no key.
 //
 //   Greenhouse  boards.greenhouse.io/<token>, job-boards.greenhouse.io/<token>  →  boards-api.greenhouse.io/v1/boards/<token>/jobs
@@ -13,8 +13,11 @@ import { CONTROL, type Page } from './fetcher.js';
 //   Recruitee   <name>.recruitee.com  →  <name>.recruitee.com/api/offers/
 //               {offers: [{title, careers_url, location, locations: [{city, state, country}], published_at: "2026-11-16 16:33:49 UTC", company_name}]}
 //               careers_url is often on the company's own careers domain (careers.<domain>), which safeUrl() allows.
+//   Workable    apply.workable.com/<account>  →  apply.workable.com/api/v1/widget/accounts/<account>   (GET; the v3 jobs API needs a POST)
+//               {name, jobs: [{title, url: apply.workable.com/j/<shortcode>, published_on: "2026-05-29", city, state, country, locations}]}
+// SmartRecruiters is left out on purpose: api.smartrecruiters.com/robots.txt disallows every crawler but LinkedIn's.
 
-export type Board = { kind: 'greenhouse' | 'lever' | 'ashby' | 'recruitee'; token: string; eu?: boolean };
+export type Board = { kind: 'greenhouse' | 'lever' | 'ashby' | 'recruitee' | 'workable'; token: string; eu?: boolean };
 export type Posting = { title: string; url: string; location: string | null; posted_at: string | null };
 
 /** A posting counts this long after its date; one with no date counts while it is listed. */
@@ -28,12 +31,13 @@ const PATTERNS: Array<[Board['kind'], RegExp]> = [
   ['ashby', /^https?:\/\/jobs\.ashbyhq\.com\/([a-z0-9](?:[a-z0-9_.%-]{0,78}[a-z0-9])?)(?:[/?#]|$)/i],
   // The board is the subdomain, so the token is a DNS label: letters, digits and inner hyphens only
   ['recruitee', /^https?:\/\/([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.recruitee\.com(?:[/?#:]|$)/i],
+  ['workable', /^https?:\/\/apply\.workable\.com\/([a-z0-9](?:[a-z0-9_-]{0,78}[a-z0-9])?)(?:[/?#]|$)/i],
 ];
 /** Tokens that are a board host's own pages, not a company's board. */
-const NOT_BOARDS = ['embed', 'jobs', 'api', 'www', 'app', 'careers', 'support', 'help', 'blog', 'docs', 'status'];
+const NOT_BOARDS = ['embed', 'jobs', 'api', 'j', 'www', 'app', 'careers', 'support', 'help', 'blog', 'docs', 'status'];
 const HOSTS: Record<Board['kind'], RegExp> = {
   greenhouse: /(^|\.)greenhouse\.io$/i, lever: /(^|\.)lever\.co$/i, ashby: /(^|\.)ashbyhq\.com$/i,
-  recruitee: /(^|\.)recruitee\.com$/i,
+  recruitee: /(^|\.)recruitee\.com$/i, workable: /^apply\.workable\.com$/i,
 };
 
 /** The job boards the company's own pages link to, at most two. */
@@ -60,9 +64,10 @@ export function boardIsTheirs(b: Board, domain: string, name: string | null): bo
 
 export const boardApi = (b: Board) => b.kind === 'greenhouse' ? `https://boards-api.${b.eu ? 'eu.' : ''}greenhouse.io/v1/boards/${encodeURIComponent(b.token)}/jobs`
   : b.kind === 'lever' ? `https://api.lever.co/v0/postings/${encodeURIComponent(b.token)}?mode=json&limit=100`
-  : b.kind === 'recruitee' ? `https://${b.token}.recruitee.com/api/offers/` : `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(b.token)}`;
+  : b.kind === 'recruitee' ? `https://${b.token}.recruitee.com/api/offers/`
+  : b.kind === 'workable' ? `https://apply.workable.com/api/v1/widget/accounts/${encodeURIComponent(b.token)}` : `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(b.token)}`;
 const boardPage = (b: Board) => b.kind === 'greenhouse' ? `https://boards.greenhouse.io/${b.token}` : b.kind === 'lever' ? `https://jobs.lever.co/${b.token}`
-  : b.kind === 'recruitee' ? `https://${b.token}.recruitee.com/` : `https://jobs.ashbyhq.com/${b.token}`;
+  : b.kind === 'recruitee' ? `https://${b.token}.recruitee.com/` : b.kind === 'workable' ? `https://apply.workable.com/${b.token}/` : `https://jobs.ashbyhq.com/${b.token}`;
 
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.replace(CONTROL, '').replace(/\s+/g, ' ').trim().slice(0, max) : '') || null;
 const when = (v: unknown) => {
@@ -83,9 +88,9 @@ function safeUrl(raw: unknown, b: Board, domain: string) {
   return boardPage(b);
 }
 
-/** "City, State, Country" for each of a Recruitee offer's places, when the offer has no location line of its own. */
-const recruiteePlaces = (v: unknown) => (Array.isArray(v) ? v : []).slice(0, 5)
-  .map((p) => [p?.city || p?.name, p?.state, p?.country].map((x) => text(x, 60)).filter(Boolean).join(', ')).filter(Boolean).join('; ');
+/** "City, State, Country" for each of a posting's places, when it has no location line of its own. Hidden places stay hidden. */
+const places = (v: unknown) => (Array.isArray(v) ? v : []).filter((p) => p && p.hidden !== true).slice(0, 5)
+  .map((p) => [p.city || p.name, p.state ?? p.region, p.country].map((x) => text(x, 60)).filter(Boolean).join(', ')).filter(Boolean).join('; ');
 
 /** The board's postings, as the API gives them, in one shape. Anything unreadable is left out. */
 export function parseBoard(b: Board, body: unknown, domain: string, now = new Date()): Posting[] {
@@ -99,12 +104,13 @@ export function parseBoard(b: Board, body: unknown, domain: string, now = new Da
     const title = text(b.kind === 'lever' ? j.text : j.title, 160);
     if (!title) continue;
     const location = text(b.kind === 'greenhouse' ? j.location?.name : b.kind === 'lever' ? j.categories?.location
-      : b.kind === 'recruitee' ? (j.location || recruiteePlaces(j.locations)) : (j.location ?? j.locationName), 120);
+      : b.kind === 'recruitee' ? (j.location || places(j.locations))
+      : b.kind === 'workable' ? ([j.city, j.state, j.country].map((x) => text(x, 60)).filter(Boolean).join(', ') || places(j.locations)) : (j.location ?? j.locationName), 120);
     // Greenhouse's updated_at moves on any edit, so an old role would look new: only the first publication counts. A date in the future is no date.
     // Recruitee's updated_at moves on edits too: published_at is the date
-    const date = when(b.kind === 'greenhouse' ? j.first_published : b.kind === 'lever' ? j.createdAt : b.kind === 'recruitee' ? j.published_at : j.publishedAt);
+    const date = when(b.kind === 'greenhouse' ? j.first_published : b.kind === 'lever' ? j.createdAt : b.kind === 'recruitee' ? j.published_at : b.kind === 'workable' ? j.published_on : j.publishedAt);
     const posted = date && date <= today ? date : null;
-    out.push({ title, location, posted_at: posted, url: safeUrl(b.kind === 'greenhouse' ? j.absolute_url : b.kind === 'lever' ? j.hostedUrl : b.kind === 'recruitee' ? j.careers_url : j.jobUrl, b, domain) });
+    out.push({ title, location, posted_at: posted, url: safeUrl(b.kind === 'greenhouse' ? j.absolute_url : b.kind === 'lever' ? j.hostedUrl : b.kind === 'recruitee' ? j.careers_url : b.kind === 'workable' ? j.url : j.jobUrl, b, domain) });
   }
   return out;
 }
@@ -128,9 +134,10 @@ export async function hiringFacts(a: App, domain: string, pages: Page[], name: s
     if (!boardIsTheirs(b, domain, name)) { logEvent(a.db, a.now(), 'company.job_board_skipped', { domain, board: b.kind, token: b.token, reason: 'not their name' }); continue; }
     const body = await a.fetchJson(boardApi(b)).catch(() => null);
     if (body === null) { logEvent(a.db, a.now(), 'company.job_board_unread', { domain, board: b.kind }); continue; }
-    // Greenhouse and Recruitee name the company on each posting: it has to be this one too
+    // Greenhouse and Recruitee name the company on each posting, Workable on the board: it has to be this one too
     const first = b.kind === 'greenhouse' ? (body as { jobs?: Array<{ company_name?: unknown }> }).jobs?.[0]?.company_name
-      : b.kind === 'recruitee' ? (body as { offers?: Array<{ company_name?: unknown }> }).offers?.[0]?.company_name : null;
+      : b.kind === 'recruitee' ? (body as { offers?: Array<{ company_name?: unknown }> }).offers?.[0]?.company_name
+      : b.kind === 'workable' ? (body as { name?: unknown }).name : null;
     if (typeof first === 'string' && !boardIsTheirs({ ...b, token: first }, domain, name)) { logEvent(a.db, a.now(), 'company.job_board_skipped', { domain, board: b.kind, token: b.token, reason: 'another company name' }); continue; }
     const fresh = freshPostings(parseBoard(b, body, domain, a.now()), a.now());
     for (const p of fresh) facts.push({ kind: 'hiring', text: `Hiring: ${p.title}${p.location ? ` (${p.location})` : ''}`, quote: p.title, source_url: p.url, published_at: p.posted_at });

@@ -3,12 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { all } from '../src/db.js';
-import { boardApi, boardsIn, freshPostings, parseBoard } from '../src/jobs.js';
+import { boardApi, boardsIn, freshPostings, hiringFacts, parseBoard } from '../src/jobs.js';
 import { buildPack, DONE_FOR_YOU_URL } from '../src/pack.js';
 import { addCompany, learnIcp, learnProduct, researchCompany, rewriteEmails, writeForCompany } from '../src/pipeline.js';
 import { TUESDAY_NOON, testApp } from './helpers.js';
 
-// Hiring signals from the job board a company's own site links to (Greenhouse, Lever, Ashby, Recruitee: public JSON, no key, no
+// Hiring signals from the job board a company's own site links to (Greenhouse, Lever, Ashby, Recruitee, Workable: public JSON, no key, no
 // model call), LinkedIn notes to send by hand (written with the emails, held to the same rules, never blocking them),
 // and the pack's fourth way to send: have Outlevo's team run it.
 
@@ -111,6 +111,33 @@ describe('hiring signals from job boards', () => {
     ]);
     expect(freshPostings(rc, TUESDAY_NOON).map((p) => p.title)).toEqual(['Senior Compliance Officer', 'Security Engineer', 'Another Board']);
     expect(parseBoard({ kind: 'recruitee', token: 'n' }, { jobs: [{ title: 'x' }] }, 'n.com')).toEqual([]);
+  });
+
+  // Trimmed from a recorded /api/v1/widget/accounts/<account> response (2026-11-17), company renamed.
+  const WORKABLE = { name: 'Northwind', description: '<p>About us</p>', jobs: [
+    { title: 'Open-Source Machine Learning Engineer - EMEA Remote', shortcode: '81B46579FE', employment_type: 'Full-time', telecommuting: true, department: 'Open Source',
+      url: 'https://apply.workable.com/j/81B46579FE', application_url: 'https://apply.workable.com/j/81B46579FE/apply', published_on: '2026-10-29', created_at: '2026-10-29',
+      country: 'France', city: 'Paris', state: 'Île-de-France', locations: [{ country: 'France', countryCode: 'FR', city: 'Paris', region: 'Île-de-France', hidden: false }] },
+    { title: 'Account Executive', shortcode: 'F88446C814', url: 'https://apply.workable.com/j/F88446C814', published_on: '2026-10-30', country: '', city: '', state: '',
+      locations: [{ country: 'United States', city: '', region: null, hidden: false }, { country: 'Secret Office', hidden: true }] },
+    { title: 'Off Board', url: 'https://evil.example/j/1', published_on: '2026-10-30' },
+    { title: 'Undated', url: 'https://apply.workable.com/j/X', published_on: 'soon' },
+  ] };
+
+  it('reads Workable boards by GET: published_on, location from the posting or its visible places, the board\'s name checked', async () => {
+    expect(boardsIn([page('https://northwind.com/careers', '', ['https://apply.workable.com/northwind/', 'https://apply.workable.com/j/81B46579FE', 'https://apply.workable.com/api/v3/accounts/x/jobs'])]))
+      .toEqual([{ kind: 'workable', token: 'northwind' }]);
+    expect(boardApi({ kind: 'workable', token: 'northwind' })).toBe('https://apply.workable.com/api/v1/widget/accounts/northwind');
+    expect(parseBoard({ kind: 'workable', token: 'northwind' }, WORKABLE, 'northwind.com', TUESDAY_NOON)).toEqual([
+      { title: 'Open-Source Machine Learning Engineer - EMEA Remote', location: 'Paris, Île-de-France, France', posted_at: '2026-10-29', url: 'https://apply.workable.com/j/81B46579FE' },
+      { title: 'Account Executive', location: 'United States', posted_at: '2026-10-30', url: 'https://apply.workable.com/j/F88446C814' },
+      { title: 'Off Board', location: null, posted_at: '2026-10-30', url: 'https://apply.workable.com/northwind/' },
+      { title: 'Undated', location: null, posted_at: null, url: 'https://apply.workable.com/j/X' },
+    ]);
+    const careers = page('https://northwind.com/careers', '', ['https://apply.workable.com/northwind/']);
+    const go = (body: unknown) => hiringFacts(testApp({ json: { 'https://apply.workable.com/api/v1/widget/accounts/northwind': body } }), 'northwind.com', [careers], 'Northwind');
+    expect((await go(WORKABLE)).map((f) => f.quote)).toEqual(['Account Executive', 'Off Board', 'Open-Source Machine Learning Engineer - EMEA Remote']);
+    expect(await go({ ...WORKABLE, name: 'Globex Corporation' })).toEqual([]);
   });
 
   it('become dated facts the company is qualified and written on, with the posting as the source', async () => {
@@ -273,6 +300,7 @@ describe('what a page hides in its scripts', () => {
     expect(boardUrls(html)).toEqual(['https://jobs.ashbyhq.com/ramp/123', 'https://boards.greenhouse.io/vercel']);
     expect(boardUrls(`<script>{"careers":"https:\\/\\/northwind.recruitee.com","o":"https://acme.recruitee.com/o/sdr","no":"https://acme.recruitee.company/"}</script>`))
       .toEqual(['https://northwind.recruitee.com', 'https://acme.recruitee.com/o/sdr']);
+    expect(boardUrls('<a href="https://apply.workable.com/northwind/">Jobs</a>')).toEqual(['https://apply.workable.com/northwind/']);
     expect(structuredAddress(html)).toBe('\nSan Francisco, CA 94104\nPhone +1 415-805-3000');
     expect(onTheirSite({ zip: '94104', phone: null, city: 'San Francisco', state: 'CA' }, [page('https://mercury.com/', `Mercury${structuredAddress(html)}`)])).toBe(true);
   });
