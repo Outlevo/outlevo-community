@@ -8,7 +8,7 @@ import { buildPack, DONE_FOR_YOU_URL } from '../src/pack.js';
 import { addCompany, learnIcp, learnProduct, researchCompany, rewriteEmails, writeForCompany } from '../src/pipeline.js';
 import { TUESDAY_NOON, testApp } from './helpers.js';
 
-// Hiring signals from the job board a company's own site links to (Greenhouse, Lever, Ashby: public JSON, no key, no
+// Hiring signals from the job board a company's own site links to (Greenhouse, Lever, Ashby, Recruitee: public JSON, no key, no
 // model call), LinkedIn notes to send by hand (written with the emails, held to the same rules, never blocking them),
 // and the pack's fourth way to send: have Outlevo's team run it.
 
@@ -77,6 +77,40 @@ describe('hiring signals from job boards', () => {
     expect(parseBoard({ kind: 'ashby', token: 'a' }, { jobs: [{ title: 'Head of Sales‮', jobUrl: 'https://jobs.ashbyhq.com/a/1', location: 'Berlin', publishedAt: '2026-10-20' }] }, 'a.com')[0])
       .toMatchObject({ title: 'Head of Sales', location: 'Berlin' });
     expect(parseBoard({ kind: 'greenhouse', token: 'n' }, { nope: 1 }, 'n.com')).toEqual([]);
+  });
+
+  // Trimmed from a recorded /api/offers/ response (2026-11-17), company renamed; extra fields kept to show the real shape.
+  const RECRUITEE = { offers: [
+    { id: 2411001, slug: 'senior-compliance-officer', status: 'published', title: 'Senior Compliance Officer', company_name: 'Northwind',
+      careers_url: 'https://careers.northwind.com/o/senior-compliance-officer', careers_apply_url: 'https://careers.northwind.com/o/senior-compliance-officer/c/new',
+      created_at: '2026-10-27 14:19:38 UTC', published_at: '2026-10-27 16:33:49 UTC', updated_at: '2026-10-27 17:25:45 UTC',
+      location: 'London, England, United Kingdom', city: 'London', country: 'United Kingdom', remote: false, on_site: false, hybrid: true,
+      locations: [{ id: 39994, name: 'London', city: 'London', state: 'England', country: 'United Kingdom', country_code: 'GB', state_code: 'ENG', street: null, postal_code: null }] },
+    { id: 2411002, title: 'Security Engineer', company_name: 'Northwind', careers_url: 'https://northwind.recruitee.com/o/security-engineer-3',
+      published_at: '2026-10-22 13:21:40 UTC', updated_at: '2026-11-16 09:00:00 UTC', location: '',
+      locations: [{ name: 'Amsterdam', city: 'Amsterdam', state: 'Noord-Holland', country: 'Netherlands' }, { city: '', name: 'Remote', country: 'Netherlands' }] },
+    { title: 'Another Board', careers_url: 'https://globex.recruitee.com/o/sdr', published_at: '2026-10-21 10:00:00 UTC', location: 'Remote' },
+    { title: 'Not Yet', careers_url: 'https://northwind.recruitee.com/o/x', published_at: '2099-01-01 10:00:00 UTC' },
+    { title: 'Edited Old Role', careers_url: 'https://northwind.recruitee.com/o/y', published_at: '2025-01-02 10:00:00 UTC', updated_at: '2026-11-15 10:00:00 UTC' },
+    { title: 'No Date', careers_url: 'javascript:alert(1)', published_at: null },
+    { title: '', careers_url: 'https://northwind.recruitee.com/o/z', published_at: '2026-10-21 10:00:00 UTC' },
+  ] };
+
+  it('reads Recruitee boards: offers, published_at, the company\'s own careers domain, and only this board\'s subdomain', () => {
+    expect(boardsIn([page('https://northwind.com/careers', '', ['https://northwind.recruitee.com/', 'https://www.recruitee.com/pricing', 'https://Acme-HQ.recruitee.com/o/sdr', 'https://-bad.recruitee.com/'])]))
+      .toEqual([{ kind: 'recruitee', token: 'northwind' }, { kind: 'recruitee', token: 'acme-hq' }]);
+    expect(boardApi({ kind: 'recruitee', token: 'northwind' })).toBe('https://northwind.recruitee.com/api/offers/');
+    const rc = parseBoard({ kind: 'recruitee', token: 'northwind' }, RECRUITEE, 'northwind.com', TUESDAY_NOON);
+    expect(rc).toEqual([
+      { title: 'Senior Compliance Officer', location: 'London, England, United Kingdom', posted_at: '2026-10-27', url: 'https://careers.northwind.com/o/senior-compliance-officer' },
+      { title: 'Security Engineer', location: 'Amsterdam, Noord-Holland, Netherlands; Remote, Netherlands', posted_at: '2026-10-22', url: 'https://northwind.recruitee.com/o/security-engineer-3' },
+      { title: 'Another Board', location: 'Remote', posted_at: '2026-10-21', url: 'https://northwind.recruitee.com/' },
+      { title: 'Not Yet', location: null, posted_at: null, url: 'https://northwind.recruitee.com/o/x' },
+      { title: 'Edited Old Role', location: null, posted_at: '2025-01-02', url: 'https://northwind.recruitee.com/o/y' },
+      { title: 'No Date', location: null, posted_at: null, url: 'https://northwind.recruitee.com/' },
+    ]);
+    expect(freshPostings(rc, TUESDAY_NOON).map((p) => p.title)).toEqual(['Senior Compliance Officer', 'Security Engineer', 'Another Board']);
+    expect(parseBoard({ kind: 'recruitee', token: 'n' }, { jobs: [{ title: 'x' }] }, 'n.com')).toEqual([]);
   });
 
   it('become dated facts the company is qualified and written on, with the posting as the source', async () => {
@@ -237,6 +271,8 @@ describe('what a page hides in its scripts', () => {
   it('finds board URLs in raw HTML and JSON, and an address in JSON-LD', () => {
     const html = `<script>{"jobs":"https:\\/\\/jobs.ashbyhq.com\\/ramp\\/123","x":"https://boards.greenhouse.io/vercel"}</script><script type="application/ld+json">{"address":{"addressLocality":"San Francisco","addressRegion":"CA","postalCode":"94104"},"telephone":"+1 415-805-3000"}</script>`;
     expect(boardUrls(html)).toEqual(['https://jobs.ashbyhq.com/ramp/123', 'https://boards.greenhouse.io/vercel']);
+    expect(boardUrls(`<script>{"careers":"https:\\/\\/northwind.recruitee.com","o":"https://acme.recruitee.com/o/sdr","no":"https://acme.recruitee.company/"}</script>`))
+      .toEqual(['https://northwind.recruitee.com', 'https://acme.recruitee.com/o/sdr']);
     expect(structuredAddress(html)).toBe('\nSan Francisco, CA 94104\nPhone +1 415-805-3000');
     expect(onTheirSite({ zip: '94104', phone: null, city: 'San Francisco', state: 'CA' }, [page('https://mercury.com/', `Mercury${structuredAddress(html)}`)])).toBe(true);
   });
