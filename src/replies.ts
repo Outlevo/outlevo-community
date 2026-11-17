@@ -53,7 +53,9 @@ export function imapInbox(a: App): Inbox {
 
 // A booking tool or a calendar says so by email. A booking stops a company's emails, so the sender has to be proven:
 // a From header costs nothing to forge, the verdict your mail provider put on the message does not.
-const BOOKING_SENDER = /^[^@]+@((.*\.)?calendly\.com|(.*\.)?cal\.com)$|^calendar-notification@google\.com$/i;
+// SavvyCal sends from notifications@savvycal.com unless you set up a sender profile on your own domain; its subject
+// lines are not confirmed from a real notification yet, so a booking counts only when the subject reads like one.
+const BOOKING_SENDER = /^[^@]+@((.*\.)?calendly\.com|(.*\.)?cal\.com|(.*\.)?savvycal\.com)$|^calendar-notification@google\.com$/i;
 const REMINDER = /\breminder\b/i;
 const CANCELLED = /\b(cancel+ed|declined)\b/i;
 const BOOKED = /\b(new event|invitation|booked|confirmed|scheduled|rescheduled)\b/i;
@@ -209,7 +211,7 @@ export async function checkReplies(a: App, inbox: Inbox = imapInbox(a)) {
   for (const m of messages) {
     if (handleUnsubscribe(a, m)) { handled++; continue; }
     if (handleBounce(a, m)) { handled++; continue; }
-    // A person we wrote to who works at Calendly or Cal.com is a person: their reply, or their opt-out, comes first.
+    // A person we wrote to who works at Calendly, Cal.com or SavvyCal is a person: their reply, or their opt-out, comes first.
     const { contact } = whoWrote(a, m);
     if (!contact && handleBooking(a, m)) { handled++; continue; }
     if (!contact) {

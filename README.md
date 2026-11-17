@@ -154,7 +154,7 @@ How it compares with the usual ways of doing this, in general terms: products di
 - **LinkedIn too, by hand.** With the emails, from the same quotes and held to the same checks, it writes a connection note and a follow-up for each company. A note that fails is left out and never holds back the emails. It never says "I emailed you", so it can go first.
 - **It learns from your deals.** Give it up to 15 companies you won and 15 you lost. It reads their home pages, and the ICP comes from what sets them apart, not from a filter list.
 - **B2B first.** Of the people you have at a company, it picks the one closest to the buyers in your ICP, and writes to one person per company at a time.
-- **It goes all the way to the meeting.** A reply that says it is interested gets a drafted answer with your booking link; a question gets a drafted answer to the question. When Calendly, Cal.com or Google Calendar emails you the booking, it shows up in Meetings.
+- **It goes all the way to the meeting.** A reply that says it is interested gets a drafted answer with your booking link; a question gets a drafted answer to the question. When Calendly, Cal.com, SavvyCal or Google Calendar emails you the booking, it shows up in Meetings.
 - **Nothing sends without you.** Every sequence waits for your approval. The answers it drafts to replies wait too. Community has no autopilot.
 - **Safe by default.** See [The rules it will not break](#the-rules-it-will-not-break).
 
@@ -246,7 +246,7 @@ outlevo run        # replies, send, contacts, write, research, every 5 minutes
 
 A new mailbox needs 2-4 weeks of warm-up before real volume, with a warm-up service of your choice. So expect the first meetings some weeks after you start, and no number of them is promised.
 
-Bookings are counted from the emails Calendly, Cal.com and Google Calendar send you, and only when your mail provider has verified the sender (DKIM or DMARC, in the `Authentication-Results` header). It counts only the verdict of your provider's own server, worked out from `imap.host`; if real bookings show as not proven in Activity, set yours with `outlevo config set imap.auth_server mx.yourprovider.com` (the event names the server it saw). If yours adds no such header, record them by hand with `outlevo meetings add <contact-id>`; a forger who guesses your provider's server name could still write one.
+Bookings are counted from the emails Calendly, Cal.com, SavvyCal and Google Calendar send you, and only when your mail provider has verified the sender (DKIM or DMARC, in the `Authentication-Results` header). It counts only the verdict of your provider's own server, worked out from `imap.host`; if real bookings show as not proven in Activity, set yours with `outlevo config set imap.auth_server mx.yourprovider.com` (the event names the server it saw). If yours adds no such header, record them by hand with `outlevo meetings add <contact-id>`; a forger who guesses your provider's server name could still write one.
 
 `outlevo --help` lists every command, and `--json` makes any of them easy for scripts and agents. To let an AI coding agent drive it, see [skills/outlevo/SKILL.md](skills/outlevo/SKILL.md).
 

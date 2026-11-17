@@ -97,6 +97,17 @@ describe('meetings', () => {
     ]));
     expect(all(a.db, 'select 1 from meetings')).toHaveLength(2);
   });
+  it('understands SavvyCal, from its own domain and only when the sender is proven', async () => {
+    // Synthetic: SavvyCal's default sender is notifications@savvycal.com; the subjects are not from a recorded notification
+    const a = testApp(); person(a); person(a, 'lee@contoso.com'); person(a, 'kim@initech.com');
+    await checkReplies(a, inbox([
+      { from: 'notifications@savvycal.com', authenticated: true, messageId: '<s1@x>', subject: 'New meeting scheduled: Intro call with Dana Reed', text: 'Invitee: Dana Reed <dana@northwind.com>' },
+      { from: 'notifications@savvycal.com', authenticated: false, messageId: '<s2@x>', subject: 'New meeting scheduled: Intro', text: 'lee@contoso.com' },
+      { from: 'notifications@savvycal.com.evil.example', authenticated: true, messageId: '<s3@x>', subject: 'New meeting scheduled: Intro', text: 'kim@initech.com' },
+    ]));
+    expect(all<any>(a.db, 'select source from meetings')).toEqual([{ source: 'savvycal.com' }]);
+    expect(all(a.db, "select 1 from events where kind = 'meeting.unproven'")).toHaveLength(1);
+  });
   it('ignores a booking from someone we never wrote to', async () => {
     const a = testApp(); person(a);
     await checkReplies(a, inbox([booking({ subject: 'New Event: x', text: 'Invitee Email: stranger@else.example' })]));
