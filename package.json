@@ -44,11 +44,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.4.0",
-    "imapflow": "^2.10.0",
-    "mailparser": "^3.14.1",
-    "nodemailer": "^10.3.1",
-    "undici": "^8.12.3"
+    "@anthropic-ai/sdk": "^1.9.0",
+    "imapflow": "^2.12.1",
+    "mailparser": "^3.14.5",
+    "nodemailer": "^10.6.0",
+    "undici": "^8.12.4"
   },
   "devDependencies": {
     "@types/mailparser": "^3.9.0",
