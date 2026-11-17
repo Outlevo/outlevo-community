@@ -189,6 +189,7 @@ Try the rules on any email, with no key and no network:
 
 ```bash
 outlevo check email.txt
+pbpaste | outlevo check -                                            # - reads the email from stdin
 ```
 
 ## Enrich your own list

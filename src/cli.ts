@@ -58,7 +58,7 @@ Emails
   review                           What waits for you
   approve <contact-id>             All the emails for that person
   reject <contact-id>
-  check <file>                     Check any email against the rules. No key, no network
+  check <file | ->                 Check any email against the rules; - reads it from stdin. No key, no network
 Sending
   send [--dry-run]                 Send the next email that is due, if every guard allows
   replies                          Read new mail, stop sequences, draft answers
@@ -142,7 +142,9 @@ async function main() {
     throw new Error('outlevo config show | set <path> <value>');
   }
   if (cmd === 'check') {
-    const { subject, body } = parseEmailFile(readFileSync(need(sub, 'a file'), 'utf8'));
+    // - is stdin, so it works in a pipe: pbpaste | outlevo check -
+    const file = need(sub, 'a file, or - for stdin');
+    const { subject, body } = parseEmailFile(readFileSync(file === '-' ? 0 : file, 'utf8'));
     const issues = lintEmail({ subject, body, strict: false });
     output({ issues }, issues.length ? issues.map((i) => `${i.level === 'error' ? 'ERROR' : 'warn '} ${i.message}`).join('\n') : 'No problems found.\nThis checks the rules only. Checking every claim against its source takes research: outlevo write.');
     if (hasErrors(issues)) process.exitCode = 1;

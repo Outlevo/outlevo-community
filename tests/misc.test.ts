@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -155,6 +155,20 @@ describe('settings and outside addresses', () => {
     expect(addressFits(a, 'dana@other.com', 'n.com')).toBe(false);
     expect(addressFits(a, 'dana@evil-n.com', 'n.com')).toBe(false);
     expect(addressFits(a, 'gone@n.com', 'n.com')).toBe(false);
+  });
+});
+
+describe('outlevo check -', () => {
+  it('reads the email from stdin, as a file is read', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'chk-'));
+    const repo = process.cwd();
+    const cli = (input: string) => spawnSync(process.execPath, ['--import', join(repo, 'node_modules/tsx/dist/esm/index.mjs'), join(repo, 'src/cli.ts'), 'check', '-'], { cwd, input, encoding: 'utf8' });
+    const ok = cli('Subject: Routing for Northwind\n\nHi Dana,\n\nSaw you are hiring two dispatchers. Worth a short call next week?\n\nSam');
+    expect(ok.stdout).toContain('No problems found.');
+    expect(ok.status).toBe(0);
+    const bad = cli('Subject: \n\n');
+    expect(bad.status).toBe(1);
+    expect(bad.stdout).toMatch(/ERROR/);
   });
 });
 
