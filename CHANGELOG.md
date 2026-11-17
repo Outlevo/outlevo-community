@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Open roles from Recruitee (`<company>.recruitee.com`) and Workable (`apply.workable.com/<account>`) job boards, with the same rules as Greenhouse, Lever and Ashby: only a board the company's own site links to, carrying its name, and only postings with a publication date in the last 60 days. A Recruitee posting may link to the company's own careers domain. SmartRecruiters is not supported: its API's robots.txt allows no crawler but LinkedIn's.
+- Opt-out phrases in Dutch, Swedish, Danish, Czech and Ukrainian. In Russian, "отпишусь" ("I'll write back") no longer counts as a request to stop.
+- `outlevo check -` reads the email from stdin: `pbpaste | outlevo check -`.
+- `outlevo companies import` says which column the domains came from (`domain`, `website`, `url`, ...).
+- Meetings booked through SavvyCal count, from `savvycal.com` and only with a sender your mail provider verified.
+- Dependencies: `@anthropic-ai/sdk` 1.6.0, `imapflow` 2.11.0, `mailparser` 3.14.2, `nodemailer` 10.4.0, `undici` 8.12.4.
+
 ## 0.2.0 (2026-11-09)
 
 - `outlevo enrich <list.csv>`: researches the companies of your own list from their own sites and writes `list.enriched.csv` with your columns first, then whether each fits, why (with its quote and source), who to write to and the status. Contacts come only from a page that names them or from your own Hunter key. It prints an estimate of model calls and asks before it goes ahead (`--yes` skips the question), never pays twice for a company already researched, and respects `model.max_calls_per_day`. Name your site with `--website` if there was no `outlevo start` here.
