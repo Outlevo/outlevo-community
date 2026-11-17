@@ -88,7 +88,7 @@ If it saves you a few hours of prospecting, a ⭐ helps other people find it.
 
 1. **Yourself, free.** Copy the emails, or load `companies.csv` into the tool you use. Send the notes in `linkedin.md` from your own LinkedIn, before the emails or after them: this tool never touches LinkedIn.
 2. **From your own mailbox with this tool, free.** You bring a mailbox on a separate domain and a source of contacts (your Hunter key or a list). It sends what you approve, reads replies, offers your calendar and counts meetings. See [From approved email to meeting](#from-approved-email-to-meeting).
-3. **With [Outlevo Cloud](https://outlevo.com/?utm_source=community&utm_medium=readme), from $29 a month.** Verified contacts and warmed-up mailboxes, ready to go, running while your laptop is closed.
+3. **With [Outlevo Cloud](https://outlevo.com/?utm_source=community&utm_medium=readme), from $199 a month.** Verified contacts and warmed-up mailboxes, ready to go, running while your laptop is closed.
 4. **[Have Outlevo's team run it](https://outlevo.com/done-for-you/?utm_source=community&utm_medium=readme).** Managed from $999 a month, or pay per booked meeting, by application.
 
 > **Status: early.** The checks, limits and guards have tests, and it has run against a live model and Hunter, and through a local mail server. It has not yet sent from a real mailbox on a real domain, so expect rough edges and start with a small list.
@@ -99,7 +99,7 @@ Community is complete on its own and stays free. [Outlevo Cloud](https://outlevo
 
 | | Community | Outlevo Cloud |
 |---|---|---|
-| Price | Free, plus your own model, mailbox and contacts costs | From $29 a month ([pricing](https://outlevo.com/pricing)) |
+| Price | Free, plus your own model, mailbox and contacts costs | From $199 a month ([pricing](https://outlevo.com/pricing)) |
 | Where it runs | Your machine | Hosted, always on |
 | Code | Open source, AGPLv3 | Proprietary |
 | Research, ICP, sourced emails | Yes | Yes |
