@@ -10,13 +10,21 @@ const DIRECT_STOP = [
   /(^|[.!,;]\s+)(please\s+|pls\s+|kindly\s+)?(stop|quit)\s+(emailing|e-mailing|contacting|writing|messaging|mailing|sending)\b/im,
   /\b(remove|unsubscribe|delete)\s+me\b/i, /\btake\s+me\s+off\b/i, /\bopt\s+me\s+out\b/i, /\bdelete\s+my\s+(data|details|information)\b/i,
   /\b(do\s+not|don'?t|never)\s+(email|e-mail|contact|write\s+to|message)\s+(me|us)\b/i, /\bno\s+more\s+e-?mails?\b/i, /\bwithdraw\s+my\s+consent\b/i,
-  // Spanish, German, French, Polish, Portuguese, Italian, Russian
+  // Spanish, German, French, Polish, Portuguese, Italian, Russian, Ukrainian, Dutch, Swedish, Danish, Czech
   /\b(darme\s+de\s+baja|dejen?\s+de\s+(escribir|enviar)|no\s+me\s+(escriban|env[ií]en|escribas))\b/i,
   /\b(abmelden|abbestellen|keine\s+e-?mails?\s+mehr|nicht\s+mehr\s+(kontaktieren|schreiben|anschreiben)|schreiben\s+sie\s+mir\s+nicht)\b/i,
   /(d[ée]sabonner|d[ée]sinscrire|ne\s+plus\s+(m'|me\s+)(envoyer|contacter|[ée]crire)|arr[êe]tez\s+de\s+m)/i,
   /(wypisz|wypisa[ćc]|nie\s+pisz|prosz[ęe]\s+nie\s+pisa[ćc]|usu[ńn]\s+mnie|usu[ńn]cie\s+mnie)/i,
   /(descadastr|parem?\s+de\s+(me\s+)?(enviar|escrever)|n[ãa]o\s+me\s+(envie|escreva))/i, /(disiscriv|non\s+scrivetemi|smettete\s+di)/i,
-  /(отпиш|не\s+пишите|удалите\s+меня|перестаньте\s+писать)/i,
+  // "отпишусь" and "відпишу" also mean "I'll write back": only unsubscribing from something, or someone, counts
+  /(отпишите\s+меня|отписаться\s+от|хочу\s+отписаться|не\s+пишите|удалите\s+меня|перестаньте\s+писать)/i,
+  /(відпишіть\s+мене|відписатися\s+від|хочу\s+відписатися|не\s+пишіть\s+мені|більше\s+не\s+пишіть|видаліть\s+мене|припиніть\s+(мені\s+)?(писати|надсилати)|не\s+надсилайте\s+мені)/i,
+  // "afmelden voor" is cancelling a meeting, not a list
+  /\b(afmelden\b(?!\s+voor\b)|uitschrijven|schrijf\s+(me|mij)\s+uit|verwijder\s+(me|mij)\s+(uit|van)|haal\s+(me|mij)\s+(uit|van)\s+(de|uw|jullie)\s+(mailing)?lijst|stop\s+met\s+(mailen|e-?mailen|mij\s+te\s+(mailen|e-?mailen|benaderen))|(mail|e-?mail|benader)\s+(me|mij)\s+niet\s+meer|geen\s+e-?mails?\s+meer)/i,
+  /(avregistrera\s+mig|avprenumerera|sluta\s+(att\s+)?(maila|mejla|skicka|kontakta|skriva\s+till)|ta\s+bort\s+mig\s+(från|ur)|inga\s+fler\s+(mejl|mail)|(maila|mejla|kontakta)\s+(mig\s+)?inte\s+(mig\s+)?(mer|igen))/i,
+  /(afmeld\s+mig|afmeldes\b|frameld\s+mig|stop\s+(venligst\s+)?med\s+at\s+(sende|skrive|maile|e-?maile|kontakte)|fjern\s+mig\s+fra|ingen\s+flere\s+(e-?)?mails|(skriv|send)\s+ikke\s+(mere\s+)?til\s+mig|kontakt\s+mig\s+ikke)/i,
+  // "odhlásit se z konference" is leaving an event: only a list or mailing counts
+  /(odhl[áa]s(it|te)\s+((m[ěe]|se)\s+)?z\s+(odb[ěe]ru|newsletteru|mailing|rozes[íi]l)|odhlaste\s+m[ěe]|nepi[šs]te\s+mi|p[řr]esta[ňn]te\s+(mi\s+)?(ps[áa]t|pos[íi]lat)|(odstra[ňn]te|vyma[žz]te|sma[žz]te)\s+m[ěe]|nekontaktujte\s+m[ěe])/i,
 ];
 const SHORT_STOP = /^\W*(please\s+)?(stop|unsubscribe|opt[\s-]?out|remove|no\s+thanks?|no\s+thank\s+you|not\s+interested)\W*((thanks?|thank\s+you|please|now|sorry)\W*)*$/i;
 const SUBJECT_STOP = /^\s*((re|aw|sv|odp)\s*:\s*)?(stop|unsubscribe|remove\s+me|opt[\s-]?out)\s*[.!]*\s*$/i;

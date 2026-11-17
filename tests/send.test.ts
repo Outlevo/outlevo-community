@@ -436,6 +436,24 @@ describe('replies', () => {
   it('recognises the usual ways of saying stop', () => {
     for (const t of ['stop', 'STOP.', 'Stop, thanks', 'Please stop', 'Stop sending me emails', 'Unsubscribe', 'please take me off this', "don't email me", 'not interested, thanks', 'GDPR: delete my data', 'Por favor darme de baja', 'Bitte abmelden', 'Merci de me désabonner', 'Proszę nie pisać', 'Отпишите меня']) expect(asksToStop('Re: hi', t), t).toBe(true);
     expect(asksToStop('STOP', '')).toBe(true);
+    const stops = [
+      'Graag afmelden.', 'Schrijf me uit alstublieft', 'Verwijder mij uit uw bestand', 'Stop met mailen a.u.b.', 'Mail me niet meer', 'Geen e-mails meer graag',
+      'Avregistrera mig, tack', 'Sluta maila mig', 'Ta bort mig från listan', 'Inga fler mejl, tack', 'Kontakta mig inte igen',
+      'Afmeld mig venligst', 'Jeg vil gerne afmeldes', 'Stop med at sende mig mails', 'Fjern mig fra jeres liste', 'Ingen flere mails tak',
+      'Odhlaste mě prosím', 'Chci se odhlásit z odběru', 'Nepište mi už', 'Přestaňte mi psát', 'Odstraňte mě z databáze', 'Nekontaktujte mě',
+      'Відпишіть мене, будь ласка', 'Хочу відписатися від розсилки', 'Не пишіть мені більше', 'Видаліть мене зі списку', 'Припиніть надсилати листи',
+      'Хочу отписаться от рассылки',
+    ];
+    for (const t of stops) expect(asksToStop('Re: hi', t), t).toBe(true);
+    const business = [
+      'Ik moet me afmelden voor de vergadering van dinsdag, kunnen we verzetten?', 'Kunnen we volgende week bellen over de prijzen?',
+      'Vi kan ta bort den punkten från agendan och prata om priset i stället.', 'Skicka gärna mer information om integrationen.',
+      'Vi vil gerne høre mere om prisen, kan I sende et tilbud?', 'Send gerne materialet til min kollega.',
+      'Musím se odhlásit z konference, ale pošlete mi prosím nabídku.', 'Pošlete mi prosím ceník do pátku.',
+      'Дякую, відпишу вам завтра після наради.', 'Надішліть, будь ласка, презентацію.',
+      'Спасибо, отпишусь после встречи.',
+    ];
+    for (const t of business) expect(asksToStop('Re: hi', t), t).toBe(false);
   });
   it('does not take interest, or talk about stopping, for a request to stop', () => {
     for (const t of ['This could help us stop losing deals', 'I am not interested in the cheap plan, but I would like a demo', 'To unsubscribe from our newsletter click here to see our offers today', 'Does your tool stop emailing people who ask? We want a demo']) expect(asksToStop('Re: hi', t), t).toBe(false);
