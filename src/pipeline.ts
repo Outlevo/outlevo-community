@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { type App, arr, nullable, obj, S, UNTRUSTED, untrusted } from './app.js';
-import { domainOf, normalizeDomain, parseCsv } from './csv.js';
+import { domainHeaderOf, domainOf, normalizeDomain, parseCsv } from './csv.js';
 import { all, logEvent, one, run } from './db.js';
 import { type Page, quoteIsOn } from './fetcher.js';
 import { isSuppressed } from './compliance.js';
@@ -124,15 +124,16 @@ export function addCompany(a: App, input: string, source: string, name?: string)
 }
 
 export function importCompanies(a: App, path: string) {
-  let added = 0; let duplicates = 0; const skipped: Array<{ row: string; reason: string }> = [];
+  let added = 0; let duplicates = 0; const skipped: Array<{ row: string; reason: string }> = []; const columns = new Set<string>();
   for (const row of parseCsv(readFileSync(path, 'utf8'))) {
     const v = domainOf(row);
+    if (v) columns.add(domainHeaderOf(row)!);
     if (!v) { skipped.push({ row: JSON.stringify(row).slice(0, 80), reason: 'no domain column or value' }); continue; }
     try { if (addCompany(a, v, 'csv', row.name ?? row.company).added) added++; else duplicates++; }
     catch (e) { skipped.push({ row: v.slice(0, 80), reason: e instanceof OwnCompany ? 'your own company' : 'not a domain' }); }
   }
   logEvent(a.db, a.now(), 'companies.imported', { added, duplicates, skipped: skipped.length });
-  return { added, duplicates, skipped };
+  return { added, duplicates, skipped, columns: [...columns] };
 }
 
 /** Web search through the model. Every company it names is still read and checked before anything is written. */

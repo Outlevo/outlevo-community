@@ -179,7 +179,7 @@ To make it better, add what you have:
 
 ```bash
 outlevo start https://yourcompany.com --won won.csv --lost lost.csv   # a column named domain
-outlevo companies import companies.csv                                # your own list, a column named domain
+outlevo companies import companies.csv                                # your own list, a column named domain, website or url
 outlevo enrich companies.csv                                          # your own list, researched: see Enrich your own list
 outlevo contacts import people.csv                                    # email, first_name, last_name, title, domain
 outlevo signals import posts.csv                                      # posts you found: domain, name, text, post_url (title, date, email)

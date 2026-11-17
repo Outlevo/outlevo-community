@@ -36,6 +36,8 @@ export function parseCsv(text: string): Array<Record<string, string>> {
 const DOMAIN_HEADERS = ['domain', 'website', 'url', 'site', 'company_domain', 'company_website', 'website_url', 'company_url', 'domain_name', 'web', 'homepage'];
 /** The company's website in a row, under whichever of the usual headers has a value. */
 export const domainOf = (row: Record<string, string>) => DOMAIN_HEADERS.map((k) => row[k]).find(Boolean) ?? '';
+/** The header domainOf() took the website from, or null. */
+export const domainHeaderOf = (row: Record<string, string>) => DOMAIN_HEADERS.find((k) => row[k]) ?? null;
 
 /** Which column holds the websites: one under a usual header, or else the one whose cells mostly are domains. -1 when none does. */
 export function domainColumn(head: string[], rows: string[][]): number {

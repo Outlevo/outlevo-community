@@ -46,7 +46,7 @@ Know your market
   icp show
 Companies and people
   companies add <domain>
-  companies import <file.csv>      Column: domain
+  companies import <file.csv>      Column: domain, or website or url (https://www.x.com/about becomes x.com)
   companies discover [--count 10] [--brief "..."]    Web search through your model
   companies list
   contacts import <file.csv>       Columns: email, first_name, last_name, title, domain
@@ -221,7 +221,7 @@ async function main() {
     }
     case 'companies': {
       if (sub === 'add') { const r = addCompany(a, need(arg, 'a domain'), 'manual'); return output(r, r.added ? `Added ${r.domain} (id ${r.id})` : `${r.domain} is already here (id ${r.id})`); }
-      if (sub === 'import') { const r = importCompanies(a, need(arg, 'a file')); return output(r, [`Added ${r.added}. Already here ${r.duplicates}. Skipped ${r.skipped.length}.`, ...r.skipped.map((x) => `  ${x.row}: ${x.reason}`)].join('\n')); }
+      if (sub === 'import') { const r = importCompanies(a, need(arg, 'a file')); return output(r, [`${r.columns.length ? `Domains from the ${r.columns.join(', ')} column${r.columns.length > 1 ? 's' : ''}. ` : ''}Added ${r.added}. Already here ${r.duplicates}. Skipped ${r.skipped.length}.`, ...r.skipped.map((x) => `  ${x.row}: ${x.reason}`)].join('\n')); }
       if (sub === 'discover') { const r = await discoverCompanies(a, num(flags.count, 10), flags.brief); return output(r, `Added: ${r.added.join(', ') || 'none'}`); }
       const rows = all(a.db, 'select id, domain, name, status, score from companies order by id');
       return output(rows, rows.map((r: any) => `${String(r.id).padStart(4)}  ${r.status.padEnd(13)} ${String(r.score ?? '').padEnd(4)} ${r.domain}`).join('\n') || 'No companies yet.');

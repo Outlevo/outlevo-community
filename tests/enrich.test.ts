@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanAsks, answersFor } from '../src/ask.js';
 import { csvKey, domainColumn, parseCsv, readCsv } from '../src/csv.js';
+import { importCompanies } from '../src/pipeline.js';
+import { all } from '../src/db.js';
 import { enrich, enrichedPath, planEnrich } from '../src/enrich.js';
 import { BudgetExhausted } from '../src/model.js';
 import { start } from '../src/start.js';
@@ -271,5 +273,17 @@ describe('your own questions', () => {
     expect(calls(a, 'answer_questions')).toBe(0);
     expect(readFileSync(join(out, 'companies.csv'), 'utf8').split('\n')[0]).toMatch(/linkedin_message$/);
     expect(readFileSync(join(out, 'index.html'), 'utf8')).not.toContain('class="q"');
+  });
+});
+
+describe('outlevo companies import', () => {
+  it('takes a website or url column when there is no domain column, reduced to the domain, and says which column', () => {
+    const a = testApp();
+    expect(importCompanies(a, listOf('name,website\nNorthwind,https://www.northwind.example/about\nGlobex,globex.example\n')))
+      .toEqual({ added: 2, duplicates: 0, skipped: [], columns: ['website'] });
+    expect(importCompanies(a, listOf('Company,URL\nInitech,http://initech.example/careers?x=1\nNorthwind,northwind.example\n')))
+      .toEqual({ added: 1, duplicates: 1, skipped: [], columns: ['url'] });
+    expect(all<{ domain: string }>(a.db, 'select domain from companies order by id').map((r) => r.domain)).toEqual(['northwind.example', 'globex.example', 'initech.example']);
+    expect(importCompanies(a, listOf('domain,website\nacme.example,https://other.example\n')).columns).toEqual(['domain']);
   });
 });
