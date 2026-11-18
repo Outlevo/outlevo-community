@@ -12,7 +12,7 @@
 <p align="center">
   The free, open-source AI SDR that runs on your machine.
   <br /><br />
-  <a href="https://outlevo.com/?utm_source=community&utm_medium=readme">Website</a>
+  <a href="https://outlevo.com/open-source/">Website</a>
   ·
   <a href="https://outlevo.github.io/outlevo-community/">Example pack</a>
   ·
@@ -321,6 +321,17 @@ npm run dev -- --help
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). AI coding agents: [AGENTS.md](AGENTS.md).
 
 Built with TypeScript on Node.js and its built-in SQLite, with Anthropic's models by default. Nothing else to host.
+
+## Further reading
+
+Free material on outlevo.com that helps with what Community does:
+
+- [Outlevo Community](https://outlevo.com/open-source/): what it does, how it works and how it compares.
+- [Cold email guides](https://outlevo.com/guides/): finding who to sell to, writing a first email, following up.
+- [Email templates and prompts](https://outlevo.com/templates/) you can adapt.
+- [Email authentication by provider](https://outlevo.com/email-authentication/): SPF, DKIM and DMARC for the mailbox you send from.
+- [Sales tools and their published prices](https://outlevo.com/tools/), and [side-by-side comparisons](https://outlevo.com/compare/).
+- [Short answers](https://outlevo.com/answers/) and a [glossary](https://outlevo.com/glossary/) of outbound terms.
 
 ## Contact
 
